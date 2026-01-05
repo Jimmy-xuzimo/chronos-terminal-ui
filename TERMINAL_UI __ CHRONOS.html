@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<!-- saved from url=(0024)https://time.xuzimo.top/ -->
+<html lang="zh-CN" data-theme="light"><script id="allow-copy_script" src="chrome-extension://aefehdhdciieocakfobpaaolhipkcpgc/content_scripts/copy.js"></script><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TERMINAL_UI :: CHRONOS</title>
+    <!-- 引入极客风格字体 VT323 (像素风) 和 Share Tech Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com/">
+    <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+    <link href="./TERMINAL_UI __ CHRONOS_files/css2" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* 深色模式 (Hacker Mode) */
+            --bg-color: #0a0a12;
+            --primary: #00f3ff;   /* 赛博蓝 */
+            --secondary: #ff9100; /* 警示橙 */
+            --dim: rgba(0, 243, 255, 0.15);
+            --panel-bg: rgba(10, 10, 18, 0.85);
+            --scanline: rgba(0, 0, 0, 0.5);
+            --crt-flicker: 0.03;
+        }
+
+        [data-theme="light"] {
+            /* 浅色模式 (Engineer Mode) */
+            --bg-color: #e0e5ec;
+            --primary: #2b3a42;   /* 深灰蓝 */
+            --secondary: #ff4500; /* 机械橙 */
+            --dim: rgba(43, 58, 66, 0.1);
+            --panel-bg: rgba(224, 229, 236, 0.9);
+            --scanline: rgba(255, 255, 255, 0.3);
+            --crt-flicker: 0.01;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--primary);
+            font-family: 'Share Tech Mono', monospace;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            transition: background 0.5s, color 0.5s;
+        }
+
+        /* --- 背景层: 代码雨 --- */
+        #code-rain {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.6; /* 让背景稍微暗一点，突显主体 */
+        }
+
+        /* --- CRT 屏幕效果层 --- */
+        .crt-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 100;
+            pointer-events: none;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, var(--scanline) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            animation: flicker 0.15s infinite;
+        }
+
+        @keyframes flicker {
+            0% { opacity: 0.95; }
+            5% { opacity: 0.85; }
+            10% { opacity: 0.95; }
+            100% { opacity: 0.95; }
+        }
+
+        /* --- 启动屏幕 (Boot Screen) --- */
+        #boot-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-color);
+            z-index: 50;
+            display: flex;
+            justify-content: flex-start;
+            align-items: flex-end;
+            padding: 40px;
+            font-family: 'VT323', monospace;
+            font-size: 1.5rem;
+            color: var(--secondary);
+            text-shadow: 0 0 5px var(--secondary);
+        }
+        
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 1.2em;
+            background: var(--secondary);
+            animation: blink 1s step-end infinite;
+            vertical-align: bottom;
+            margin-left: 5px;
+        }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        /* --- 主界面 --- */
+        .main-interface {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0; /* 初始隐藏，等动画 */
+            transition: opacity 1s ease;
+        }
+
+        /* 终端面板 */
+        .terminal-panel {
+            width: 600px;
+            max-width: 90%;
+            background: var(--panel-bg);
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 20px var(--dim), inset 0 0 30px var(--dim);
+            padding: 2px; /* 制造双层边框效果 */
+            position: relative;
+        }
+
+        /* 顶部标题栏 */
+        .panel-header {
+            background: var(--dim);
+            color: var(--primary);
+            padding: 5px 15px;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--primary);
+        }
+
+        .panel-header .status-dot {
+            width: 10px;
+            height: 10px;
+            background: var(--secondary);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--secondary);
+            animation: pulse 2s infinite;
+        }
+
+        /* 内容区域 */
+        .panel-content {
+            padding: 40px;
+            text-align: center;
+            position: relative;
+        }
+
+        /* 角落装饰 */
+        .corner {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            border: 2px solid var(--secondary);
+            transition: all 0.3s;
+        }
+        .tl { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+        .tr { top: -2px; right: -2px; border-left: none; border-bottom: none; }
+        .bl { bottom: -2px; left: -2px; border-right: none; border-top: none; }
+        .br { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+
+        /* 时间显示 */
+        .time-group {
+            margin-bottom: 20px;
+        }
+        
+        .time-label {
+            font-size: 0.8rem;
+            color: var(--secondary);
+            letter-spacing: 5px;
+            margin-bottom: 5px;
+            opacity: 0.8;
+        }
+
+        .big-time {
+            font-size: 6rem;
+            font-family: 'VT323', monospace; /* 像素字体 */
+            color: var(--primary);
+            text-shadow: 0 0 15px var(--primary);
+            line-height: 1;
+            letter-spacing: 2px;
+        }
+
+        .date-group {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            font-size: 1.5rem;
+            border-top: 1px dashed var(--dim);
+            padding-top: 20px;
+            margin-top: 20px;
+        }
+
+        .data-unit {
+            display: flex;
+            flex-direction: column;
+        }
+        .data-val { color: var(--primary); font-weight: bold; }
+        .data-key { font-size: 0.7rem; color: var(--secondary); margin-top: 5px; }
+
+        /* 底部系统信息 */
+        .sys-info {
+            font-size: 0.7rem;
+            margin-top: 30px;
+            color: var(--primary);
+            opacity: 0.6;
+            text-align: left;
+            font-family: 'VT323', monospace;
+            line-height: 1.4;
+        }
+
+        /* 模式切换按钮 */
+        .mode-switch {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 60;
+            background: transparent;
+            border: 1px solid var(--secondary);
+            color: var(--secondary);
+            padding: 5px 15px;
+            cursor: pointer;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8rem;
+            opacity: 0; /* 初始隐藏 */
+            transition: all 0.3s;
+        }
+        .mode-switch:hover {
+            background: var(--secondary);
+            color: var(--bg-color);
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; box-shadow: 0 0 0 var(--secondary); }
+            50% { opacity: 1; box-shadow: 0 0 10px var(--secondary); }
+            100% { opacity: 0.5; box-shadow: 0 0 0 var(--secondary); }
+        }
+
+        /* 响应式 */
+        @media (max-width: 600px) {
+            .big-time { font-size: 4rem; }
+            .date-group { font-size: 1rem; }
+            #boot-screen { font-size: 1rem; padding: 20px; }
+            .panel-content { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. 背景代码雨 -->
+    <canvas id="code-rain" width="1600" height="782"></canvas>
+
+    <!-- 2. CRT 视觉特效遮罩 -->
+    <div class="crt-overlay"></div>
+
+    <!-- 3. 启动时的打字机界面 -->
+    <div id="boot-screen" style="opacity: 0; display: none;">
+        <div id="boot-text">&gt; INITIALIZING KERNEL...<br>&gt; LOADING MODULES: [TIME_SYNC, GFX_ENGINE, MATRIX_NET]<br>&gt; CHECKING MEMORY INTEGRITY... OK<br>&gt; CONNECTING TO SATELLITE... SUCCESS<br>&gt; DECRYPTING USER INTERFACE...<br>&gt; SYSTEM READY.<br></div><div class="cursor"></div>
+    </div>
+
+    <!-- 4. 模式切换按钮 (动画结束后显示) -->
+    <button class="mode-switch" id="theme-btn" onclick="toggleTheme()" style="opacity: 0.8;">[ SWITCH_MODE ]</button>
+
+    <!-- 5. 主时间界面 -->
+    <div class="main-interface" id="main-ui" style="opacity: 1;">
+        <div class="terminal-panel">
+            <!-- 装饰性四个角 -->
+            <div class="corner tl"></div>
+            <div class="corner tr"></div>
+            <div class="corner bl"></div>
+            <div class="corner br"></div>
+
+            <div class="panel-header">
+                <span>root@chronos-system:~# ./watch_time</span>
+                <div class="status-dot"></div>
+            </div>
+
+            <div class="panel-content">
+                <div class="time-group">
+                    <div class="time-label">CURRENT_SYSTEM_TIME</div>
+                    <div class="big-time" id="time-display">20:46:48</div>
+                </div>
+
+                <div class="date-group">
+                    <div class="data-unit">
+                        <span class="data-val" id="year-val">2026</span>
+                        <span class="data-key">YEAR</span>
+                    </div>
+                    <div class="data-unit">
+                        <span class="data-val" id="month-val">01</span>
+                        <span class="data-key">MONTH</span>
+                    </div>
+                    <div class="data-unit">
+                        <span class="data-val" id="day-val">05</span>
+                        <span class="data-key">DAY</span>
+                    </div>
+                    <div class="data-unit">
+                        <span class="data-val" id="week-val">MON</span>
+                        <span class="data-key">WEEKDAY</span>
+                    </div>
+                </div>
+
+                <div class="sys-info">
+                    &gt; CPU_LOAD: 12%  MEM_USAGE: 4096MB<br>
+                    &gt; NET_STATUS: CONNECTED (SECURE)<br>
+                    &gt; LATENCY: 2ms<br>
+                    &gt; SYNC_SERVER: ASIA_SHANGHAI_NTP
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ================================
+           1. 系统启动序列 (打字机效果)
+           ================================ */
+        const bootTextElement = document.getElementById('boot-text');
+        const bootScreen = document.getElementById('boot-screen');
+        const mainUI = document.getElementById('main-ui');
+        const themeBtn = document.getElementById('theme-btn');
+        
+        // 模拟启动日志
+        const bootLogs = [
+            "INITIALIZING KERNEL...",
+            "LOADING MODULES: [TIME_SYNC, GFX_ENGINE, MATRIX_NET]",
+            "CHECKING MEMORY INTEGRITY... OK",
+            "CONNECTING TO SATELLITE... SUCCESS",
+            "DECRYPTING USER INTERFACE...",
+            "SYSTEM READY."
+        ];
+
+        async function typeWriter(text, speed = 30) {
+            for (let i = 0; i < text.length; i++) {
+                bootTextElement.innerHTML += text.charAt(i);
+                await new Promise(r => setTimeout(r, speed));
+            }
+            bootTextElement.innerHTML += "<br>";
+        }
+
+        async function startBootSequence() {
+            // 快速打出每一行日志
+            for (let log of bootLogs) {
+                await typeWriter("> " + log, 20); // 打字速度
+                await new Promise(r => setTimeout(r, 100)); // 行间停顿
+            }
+            
+            await new Promise(r => setTimeout(r, 500)); // 最后停顿
+
+            // 切换到主界面
+            bootScreen.style.opacity = '0';
+            setTimeout(() => {
+                bootScreen.style.display = 'none';
+                mainUI.style.opacity = '1';
+                themeBtn.style.opacity = '0.8';
+                startClock(); // 启动时钟
+            }, 500);
+        }
+
+        // 页面加载即开始
+        window.onload = startBootSequence;
+
+
+        /* ================================
+           2. 背景代码雨 (Matrix Effect)
+           ================================ */
+        const canvas = document.getElementById('code-rain');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        
+        // 字符集：片假名 + 拉丁文 + 数字 (经典黑客风)
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$#@%&";
+        let drops = [];
+        const fontSize = 14;
+
+        function resizeCanvas() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            
+            const columns = Math.ceil(width / fontSize);
+            drops = [];
+            for (let i = 0; i < columns; i++) {
+                drops[i] = Math.random() * -100; // 随机起始高度，错落感
+            }
+        }
+
+        function drawRain() {
+            // 获取当前主题颜色
+            const style = getComputedStyle(document.body);
+            // 稍微半透明黑色覆盖，形成拖尾效果
+            ctx.fillStyle = style.getPropertyValue('--bg-color') === '#e0e5ec' ? 'rgba(224, 229, 236, 0.1)' : 'rgba(10, 10, 18, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            // 设置字体
+            ctx.fillStyle = style.getPropertyValue('--primary'); 
+            ctx.font = fontSize + "px 'VT323'";
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = chars.charAt(Math.floor(Math.random() * chars.length));
+                // x = 列号 * 字体宽度, y = 当前下落值 * 字体高度
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                // 随机重置回顶部
+                if (drops[i] * fontSize > height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+            requestAnimationFrame(drawRain);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        requestAnimationFrame(drawRain);
+
+
+        /* ================================
+           3. 时钟核心逻辑
+           ================================ */
+        function startClock() {
+            function update() {
+                const now = new Date();
+                
+                // 时间
+                const h = String(now.getHours()).padStart(2, '0');
+                const m = String(now.getMinutes()).padStart(2, '0');
+                const s = String(now.getSeconds()).padStart(2, '0');
+                document.getElementById('time-display').textContent = `${h}:${m}:${s}`;
+
+                // 日期
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const weekDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+                
+                document.getElementById('year-val').textContent = year;
+                document.getElementById('month-val').textContent = month;
+                document.getElementById('day-val').textContent = day;
+                document.getElementById('week-val').textContent = weekDays[now.getDay()];
+
+                requestAnimationFrame(update);
+            }
+            update();
+        }
+
+
+        /* ================================
+           4. 主题切换
+           ================================ */
+        let isDark = true;
+        
+        // 读取本地存储
+        if(localStorage.getItem('theme') === 'light') {
+            isDark = false;
+            document.documentElement.setAttribute('data-theme', 'light');
+        }
+
+        function toggleTheme() {
+            isDark = !isDark;
+            const theme = isDark ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+        }
+
+    </script>
+
+<div id="aix-action-loading-host"><template shadowrootmode="closed"><style>
+        .action-loading-overlay {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2147483647;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .loading-container {
+            background: #487c54;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 50px;
+            box-shadow: 0 4px 20px rgba(144, 169, 148, 0.4);
+            font-size: 14px;
+            min-width: 100px;
+        }
+
+        .loading-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid #ffffff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
+        }
+
+        .loading-text {
+            white-space: nowrap;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Transition 动画：从顶部往下滑出 */
+        .loading-enter-active,
+        .loading-leave-active {
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .loading-enter-from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-30px);
+        }
+
+        .loading-leave-to {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-30px);
+        }
+
+        .loading-enter-to,
+        .loading-leave-from {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    </style><div data-v-app=""><!----></div></template></div><script src="chrome-extension://ibdfeimkglcmdejppabkaidpippniiob/content/windowDataMessage.js"></script><div id="aix-drop-panel">
+    <a id="aix-drop-panel-close-btn">×</a>
+        <div id="aix-drop-panel-inner">
+            <div class="aix-content">
+                <svg class="aix-icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="5892"><path d="M494.933333 782.933333c2.133333 2.133333 4.266667 4.266667 8.533334 6.4h8.533333c6.4 0 10.666667-2.133333 14.933333-6.4l2.133334-2.133333 275.2-275.2c8.533333-8.533333 8.533333-21.333333 0-29.866667-8.533333-8.533333-21.333333-8.533333-29.866667 0L533.333333 716.8V128c0-12.8-8.533333-21.333333-21.333333-21.333333s-21.333333 8.533333-21.333333 21.333333v588.8L249.6 475.733333c-8.533333-8.533333-21.333333-8.533333-29.866667 0-8.533333 8.533333-8.533333 21.333333 0 29.866667l275.2 277.333333zM853.333333 874.666667H172.8c-12.8 0-21.333333 8.533333-21.333333 21.333333s8.533333 21.333333 21.333333 21.333333H853.333333c12.8 0 21.333333-8.533333 21.333334-21.333333s-10.666667-21.333333-21.333334-21.333333z" p-id="5893"></path></svg>
+                <div class="aix-title">拖拽到此处完成下载</div>
+                <div class="aix-desc">图片将完成下载</div>
+            </div>
+            <div id="aix-supported-by">AIX智能下载器</div>
+        </div>
+    </div></body></html>
