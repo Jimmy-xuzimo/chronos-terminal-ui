@@ -120,7 +120,6 @@ MIT License
 ## 🌐 作者与链接
 
 - 作者：Jimmy-xuzimo
-- 项目链接：[GitHub - chronos-terminal-ui](https://github.com/your-username/chronos-terminal-ui)
 - 设计灵感：科幻电影、终端界面、工业控制台
 
 ---
