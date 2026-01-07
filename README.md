@@ -107,7 +107,6 @@ chronos-terminal-ui/
 
 <img width="4400" height="2722" alt="image" src="https://github.com/user-attachments/assets/1c73674f-c557-4094-adfc-2528ede26336" />
 <img width="4400" height="2722" alt="image" src="https://github.com/user-attachments/assets/95d72986-1708-411f-aee5-d54209f7e067" />
-<img width="4400" height="2722" alt="image" src="https://github.com/user-attachments/assets/20a76c57-4132-434f-b612-88625998a562" />
 
 ---
 
